@@ -16,6 +16,8 @@ torch.manual_seed(42)
 
 model_name = "mistralai/Mistral-7B-Instruct-v0.3"
 
+# model_name = "google/gemma-2b-it"
+
 
 def load_situations(n=30):
     dataset = load_dataset(
@@ -70,8 +72,6 @@ def main():
 
     classifier = EmotionClassifier()
 
-    bnb_config = BitsAndBytesConfig(load_in_8bit=True)
-
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     model = AutoModelForCausalLM.from_pretrained(
@@ -79,6 +79,11 @@ def main():
         torch_dtype=torch.float16,
         device_map="auto"
     )
+    
+    # model = AutoModelForCausalLM.from_pretrained(
+    #     model_name,
+    #     torch_dtype=torch.float16
+    # ).to("cuda")
 
     situations = load_situations(30)
 
@@ -86,6 +91,7 @@ def main():
 
     for i, situation in enumerate(situations):
         print(f"Running {i+1}/30")
+        print("Generating...")
 
         dialogue = generate_dialogue(situation, tokenizer, model)
 
@@ -104,11 +110,24 @@ def main():
                 "seed": 42
             }
         })
+        
+        print("Done generating.")
+        print("Drift:", drift)
 
     os.makedirs("results", exist_ok=True)
 
     with open("results/baseline_results.json", "w") as f:
         json.dump(results, f, indent=2)
+    
+    import numpy as np
+
+    drifts = [x["drift"] for x in results]
+
+    print("\n===== BASELINE SUMMARY =====")
+    print("Mean drift:", np.mean(drifts))
+    print("Std drift:", np.std(drifts))
+    print("Min drift:", np.min(drifts))
+    print("Max drift:", np.max(drifts))
 
 
 if __name__ == "__main__":
