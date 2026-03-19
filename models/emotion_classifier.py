@@ -13,20 +13,29 @@ class EmotionClassifier:
         self.model.eval()
         
         self.id2label = self.model.config.id2label
+        self.label2id = self.model.config.label2id
 
     def predict_proba(self, text):
-        inputs = self.tokenizer(text, return_tensors="pt", truncation=True).to(self.device)
-        
+        inputs = self.tokenizer(
+            text,
+            return_tensors="pt",
+            padding=True,
+            truncation=True
+        )
+
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
         with torch.no_grad():
             outputs = self.model(**inputs)
-        
-        probs = torch.sigmoid(outputs.logits)[0]
-        return probs
+
+        probs = torch.sigmoid(outputs.logits)
+
+        return probs.detach().cpu().numpy()
 
     def predict_top_emotion(self, text):
-        probs = self.predict_proba(text)
-        top_idx = torch.argmax(probs).item()
-        return self.id2label[top_idx], float(probs[top_idx])
+        probs = self.predict_proba(text)[0]  # shape (num_emotions,)
+        top_idx = probs.argmax()
+        return self.id2label[int(top_idx)], float(probs[top_idx])
 
     def predict_multi_label(self, text):
         probs = self.predict_proba(text)

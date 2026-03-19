@@ -23,3 +23,6 @@ conda activate affectplan
 ```bash
 python -m experiments.script
 ```
+```bash
+python -m experiments.run_baseline_generation
+```
