@@ -40,12 +40,12 @@ MAX_NEW_TOKENS = 64
 SCORER_MODE = "classifier"
 
 
-
 def get_model_device(model):
     return next(model.parameters()).device
 
 
 # Generation helper
+
 
 def sample_replies(messages, tokenizer, model, n=1, max_new_tokens=MAX_NEW_TOKENS):
     """
@@ -81,6 +81,7 @@ def sample_replies(messages, tokenizer, model, n=1, max_new_tokens=MAX_NEW_TOKEN
 
     return replies
 
+
 # Scoring
 def score_classifier(reply, target_emotion, classifier):
     if target_emotion not in classifier.label2id:
@@ -113,7 +114,8 @@ def score_llm_judge(reply, target_emotion, dialogue_history):
 
     history_str = "\n".join(
         f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
-        for m in dialogue_history if m["role"] != "system"
+        for m in dialogue_history
+        if m["role"] != "system"
     )
 
     prompt = f"""You are evaluating a candidate response in an empathetic dialogue.
@@ -141,7 +143,9 @@ Respond ONLY with JSON: {{"score": <float>, "reason": "<one sentence>"}}"""
         return 0.0
 
 
-def score_reply(reply, target_emotion, classifier, dialogue_history, scorer_mode=SCORER_MODE):
+def score_reply(
+    reply, target_emotion, classifier, dialogue_history, scorer_mode=SCORER_MODE
+):
     if scorer_mode == "classifier":
         return score_classifier(reply, target_emotion, classifier)
 
@@ -156,7 +160,9 @@ def score_reply(reply, target_emotion, classifier, dialogue_history, scorer_mode
     raise ValueError(f"Invalid scorer_mode: {scorer_mode}")
 
 
-def score_replies_batch(replies, target_emotion, classifier, dialogue_history, scorer_mode=SCORER_MODE):
+def score_replies_batch(
+    replies, target_emotion, classifier, dialogue_history, scorer_mode=SCORER_MODE
+):
     """
     Fast path for classifier mode; fallback to per-reply scoring for other modes.
     """
@@ -196,6 +202,7 @@ def trajectory_score_from_replies_targets(replies, mapped_targets, classifier):
 
 # Tree node
 
+
 class ToTNode:
     def __init__(
         self,
@@ -226,6 +233,7 @@ class ToTNode:
 # ---------------------------------------------------------------------------
 # ToT: build tree, beam-prune by cached trajectory-level score
 # ---------------------------------------------------------------------------
+
 
 def build_tot_tree(
     messages,
@@ -289,7 +297,9 @@ def build_tot_tree(
 
                 # Inject real next user turn for deeper lookahead
                 if d < len(future_user_turns):
-                    new_msgs = new_msgs + [{"role": "user", "content": future_user_turns[d]}]
+                    new_msgs = new_msgs + [
+                        {"role": "user", "content": future_user_turns[d]}
+                    ]
 
                 child_traj_score = trajectory_score_from_replies_targets(
                     child_path_replies,
@@ -328,6 +338,7 @@ def build_tot_tree(
 # Full conversation generation
 # ---------------------------------------------------------------------------
 
+
 def generate_tot_conversation(
     conversation,
     tokenizer,
@@ -340,18 +351,23 @@ def generate_tot_conversation(
     depth=DEPTH,
 ):
     messages = [
-        {"role": "system", "content": (
-            "You are a supportive and empathetic conversational partner. "
-            f"Guide the conversation through these emotional tones in order: "
-            f"{', '.join(target_trajectory)}."
-        )}
+        {
+            "role": "system",
+            "content": (
+                "You are a supportive and empathetic conversational partner. "
+                f"Guide the conversation through these emotional tones in order: "
+                f"{', '.join(target_trajectory)}."
+            ),
+        }
     ]
 
     generated_turns = []
     tot_log = []
     assistant_idx = 0
 
-    user_turns = [t["utterance"].strip() for i, t in enumerate(conversation) if i % 2 == 0]
+    user_turns = [
+        t["utterance"].strip() for i, t in enumerate(conversation) if i % 2 == 0
+    ]
     user_turn_idx = 0
 
     for idx, turn in enumerate(conversation):
@@ -361,8 +377,8 @@ def generate_tot_conversation(
             messages.append({"role": "user", "content": utterance})
             user_turn_idx += 1
         else:
-            future_targets = target_trajectory[assistant_idx: assistant_idx + depth]
-            future_user_turns = user_turns[user_turn_idx: user_turn_idx + depth]
+            future_targets = target_trajectory[assistant_idx : assistant_idx + depth]
+            future_user_turns = user_turns[user_turn_idx : user_turn_idx + depth]
 
             best_leaf = build_tot_tree(
                 messages=messages,
@@ -380,14 +396,18 @@ def generate_tot_conversation(
             best_reply = best_leaf.path_replies[0]
             traj_score = best_leaf.trajectory_score
 
-            tot_log.append({
-                "turn": assistant_idx,
-                "target_emotion": future_targets[0] if future_targets else "neutral",
-                "reply": best_reply,
-                "trajectory_score": traj_score,
-                "depth_reached": best_leaf.depth,
-                "scorer_mode": scorer_mode,
-            })
+            tot_log.append(
+                {
+                    "turn": assistant_idx,
+                    "target_emotion": future_targets[0]
+                    if future_targets
+                    else "neutral",
+                    "reply": best_reply,
+                    "trajectory_score": traj_score,
+                    "depth_reached": best_leaf.depth,
+                    "scorer_mode": scorer_mode,
+                }
+            )
 
             generated_turns.append(best_reply)
             messages.append({"role": "assistant", "content": best_reply})
@@ -399,6 +419,7 @@ def generate_tot_conversation(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -443,14 +464,14 @@ def main():
     results = []
 
     for i, conversation in enumerate(conversations):
-        print(f"\nRunning {i+1}/{len(conversations)}")
+        print(f"\nRunning {i + 1}/{len(conversations)}")
 
         situation = conversation[0]["prompt"]
         gold_emotion_label = conversation[0]["context"]
         n_assistant_turns = sum(1 for idx in range(len(conversation)) if idx % 2 != 0)
         assistant_target = get_assistant_target(gold_emotion_label)
         target_trajectory = [assistant_target] * n_assistant_turns
-        
+
         generated_turns, tot_log = generate_tot_conversation(
             conversation=conversation,
             tokenizer=tokenizer,
@@ -471,37 +492,43 @@ def main():
         reversal_rate = compute_reversal_rate(labels)
         peak_drift_turn = compute_peak_drift_turn(per_step_dist)
         alignment_score = compute_trajectory_alignment(labels, target_trajectory)
-        traj_level_score = compute_trajectory_level_score(labels, target_trajectory, per_step_dist)
-        mean_traj_score = float(np.mean([t["trajectory_score"] for t in tot_log])) if tot_log else 0.0
+        traj_level_score = compute_trajectory_level_score(
+            labels, target_trajectory, per_step_dist
+        )
+        mean_traj_score = (
+            float(np.mean([t["trajectory_score"] for t in tot_log])) if tot_log else 0.0
+        )
 
-        results.append({
-            "situation": situation,
-            "target_trajectory": target_trajectory,
-            "user_emotion": gold_emotion_label,
-            "assistant_target": assistant_target,
-            "generated_dialogue": generated_turns,
-            "trajectory": labels,
-            "drift": drift,
-            "per_step_distances": per_step_dist,
-            "per_turn_entropy": entropies,
-            "reversal_rate": reversal_rate,
-            "peak_drift_turn": peak_drift_turn,
-            "alignment_score": alignment_score,
-            "traj_level_score": traj_level_score,
-            "mean_traj_score": mean_traj_score,
-            "tot_log": tot_log,
-            "metadata": {
-                "model": model_name,
-                "k_branches": k_branches,
-                "beam_width": beam_width,
-                "depth": depth,
-                "max_new_tokens": MAX_NEW_TOKENS,
-                "planner": "tot",
-                "scorer": scorer_mode,
-                "temperature": 0.8,
-                "seed": 42,
+        results.append(
+            {
+                "situation": situation,
+                "target_trajectory": target_trajectory,
+                "user_emotion": gold_emotion_label,
+                "assistant_target": assistant_target,
+                "generated_dialogue": generated_turns,
+                "trajectory": labels,
+                "drift": drift,
+                "per_step_distances": per_step_dist,
+                "per_turn_entropy": entropies,
+                "reversal_rate": reversal_rate,
+                "peak_drift_turn": peak_drift_turn,
+                "alignment_score": alignment_score,
+                "traj_level_score": traj_level_score,
+                "mean_traj_score": mean_traj_score,
+                "tot_log": tot_log,
+                "metadata": {
+                    "model": model_name,
+                    "k_branches": k_branches,
+                    "beam_width": beam_width,
+                    "depth": depth,
+                    "max_new_tokens": MAX_NEW_TOKENS,
+                    "planner": "tot",
+                    "scorer": scorer_mode,
+                    "temperature": 0.8,
+                    "seed": 42,
+                },
             }
-        })
+        )
 
         print(
             f"  User emotion: {gold_emotion_label} | "
@@ -526,10 +553,13 @@ def main():
         ("Alignment score", [x["alignment_score"] for x in results]),
         ("Reversal rate", [x["reversal_rate"] for x in results]),
         ("Mean entropy", [np.mean(x["per_turn_entropy"]) for x in results]),
-        ("Mean step distance", [
-            np.mean(x["per_step_distances"]) if x["per_step_distances"] else 0.0
-            for x in results
-        ]),
+        (
+            "Mean step distance",
+            [
+                np.mean(x["per_step_distances"]) if x["per_step_distances"] else 0.0
+                for x in results
+            ],
+        ),
         ("Traj level score", [x["traj_level_score"] for x in results]),
         ("Mean traj score", [x["mean_traj_score"] for x in results]),
     ]:

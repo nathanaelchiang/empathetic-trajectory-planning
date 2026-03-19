@@ -8,7 +8,7 @@ if __name__ == "__main__":
     dialogue = [
         "I just lost my job today.",
         "That must feel overwhelming. I'm really sorry you're going through that.",
-        "Yeah, I don't know what to do next."
+        "Yeah, I don't know what to do next.",
     ]
 
     trajectory = extract_trajectory(dialogue, classifier)

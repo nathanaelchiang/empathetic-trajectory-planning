@@ -40,23 +40,16 @@ K_EXPAND = 3
 SCORER_MODE = "classifier"
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
+
 
 def get_model_device(model):
     return next(model.parameters()).device
 
 
-# ---------------------------------------------------------------------------
-# Generation helper
-# ---------------------------------------------------------------------------
-
 def sample_reply(messages, tokenizer, model):
     text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True
+        messages, tokenize=False, add_generation_prompt=True
     )
     inputs = tokenizer(text, return_tensors="pt")
     device = get_model_device(model)
@@ -72,14 +65,11 @@ def sample_reply(messages, tokenizer, model):
             pad_token_id=tokenizer.eos_token_id,
         )
 
-    new_tokens = output_ids[0][inputs["input_ids"].shape[-1]:]
+    new_tokens = output_ids[0][inputs["input_ids"].shape[-1] :]
     return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
-# ---------------------------------------------------------------------------
 # Scoring
-# ---------------------------------------------------------------------------
-
 def score_classifier(reply, target_emotion, classifier):
     if target_emotion not in classifier.label2id:
         raise ValueError(
@@ -98,7 +88,8 @@ def score_llm_judge(reply, target_emotion, dialogue_history):
 
     history_str = "\n".join(
         f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
-        for m in dialogue_history if m["role"] != "system"
+        for m in dialogue_history
+        if m["role"] != "system"
     )
 
     prompt = f"""You are evaluating a candidate response in an empathetic dialogue.
@@ -126,7 +117,9 @@ Respond ONLY with JSON: {{"score": <float>, "reason": "<one sentence>"}}"""
         return 0.0
 
 
-def score_node(reply, target_emotion, classifier, dialogue_history, scorer_mode=SCORER_MODE):
+def score_node(
+    reply, target_emotion, classifier, dialogue_history, scorer_mode=SCORER_MODE
+):
     if scorer_mode == "classifier":
         return score_classifier(reply, target_emotion, classifier)
 
@@ -141,9 +134,8 @@ def score_node(reply, target_emotion, classifier, dialogue_history, scorer_mode=
     raise ValueError(f"Invalid scorer_mode: {scorer_mode}")
 
 
-# ---------------------------------------------------------------------------
 # MCTS Node
-# ---------------------------------------------------------------------------
+
 
 class MCTSNode:
     def __init__(self, messages, reply=None, parent=None, target_emotion=None):
@@ -174,9 +166,8 @@ class MCTSNode:
         return max(self.children, key=lambda n: n.value)
 
 
-# ---------------------------------------------------------------------------
 # MCTS phases
-# ---------------------------------------------------------------------------
+
 
 def selection(root):
     node = root
@@ -220,7 +211,7 @@ def rollout(
     future_targets,
     future_user_turns,
     depth=N_ROLLOUT,
-    scorer_mode=SCORER_MODE
+    scorer_mode=SCORER_MODE,
 ):
     messages = deepcopy(node.messages)
     total_score = 0.0
@@ -265,9 +256,8 @@ def backpropagation(node, value):
         node = node.parent
 
 
-# ---------------------------------------------------------------------------
 # One MCTS turn
-# ---------------------------------------------------------------------------
+
 
 def mcts_select_reply(
     messages,
@@ -280,7 +270,7 @@ def mcts_select_reply(
     n_sims=N_SIMULATIONS,
     k_expand=K_EXPAND,
     n_rollout=N_ROLLOUT,
-    scorer_mode=SCORER_MODE
+    scorer_mode=SCORER_MODE,
 ):
     root = MCTSNode(messages, target_emotion=target_emotion)
 
@@ -314,7 +304,8 @@ def mcts_select_reply(
                 messages,
                 scorer_mode=scorer_mode,
             )
-            if rollout_node.reply else 0.0
+            if rollout_node.reply
+            else 0.0
         )
 
         # 5. Future rollout score
@@ -356,10 +347,7 @@ def mcts_select_reply(
     return best.reply, tree_stats
 
 
-# ---------------------------------------------------------------------------
 # Full conversation generation
-# ---------------------------------------------------------------------------
-
 def generate_mcts_conversation(
     conversation,
     tokenizer,
@@ -369,21 +357,26 @@ def generate_mcts_conversation(
     scorer_mode=SCORER_MODE,
     n_simulations=N_SIMULATIONS,
     n_rollout=N_ROLLOUT,
-    k_expand=K_EXPAND
+    k_expand=K_EXPAND,
 ):
     messages = [
-        {"role": "system", "content": (
-            "You are a supportive and empathetic conversational partner. "
-            f"Guide the conversation through these emotional tones in order: "
-            f"{', '.join(target_trajectory)}."
-        )}
+        {
+            "role": "system",
+            "content": (
+                "You are a supportive and empathetic conversational partner. "
+                f"Guide the conversation through these emotional tones in order: "
+                f"{', '.join(target_trajectory)}."
+            ),
+        }
     ]
 
     generated_turns = []
     mcts_log = []
     assistant_idx = 0
 
-    user_turns = [t["utterance"].strip() for i, t in enumerate(conversation) if i % 2 == 0]
+    user_turns = [
+        t["utterance"].strip() for i, t in enumerate(conversation) if i % 2 == 0
+    ]
     user_turn_idx = 0
 
     for idx, turn in enumerate(conversation):
@@ -398,8 +391,10 @@ def generate_mcts_conversation(
                 if assistant_idx < len(target_trajectory)
                 else target_trajectory[-1]
             )
-            future_targets = target_trajectory[assistant_idx + 1: assistant_idx + 1 + n_rollout]
-            future_user_turns = user_turns[user_turn_idx: user_turn_idx + n_rollout]
+            future_targets = target_trajectory[
+                assistant_idx + 1 : assistant_idx + 1 + n_rollout
+            ]
+            future_user_turns = user_turns[user_turn_idx : user_turn_idx + n_rollout]
 
             best_reply, stats = mcts_select_reply(
                 messages,
@@ -415,12 +410,14 @@ def generate_mcts_conversation(
                 scorer_mode=scorer_mode,
             )
 
-            mcts_log.append({
-                "turn": assistant_idx,
-                "target_emotion": target_emotion,
-                "reply": best_reply,
-                **stats,
-            })
+            mcts_log.append(
+                {
+                    "turn": assistant_idx,
+                    "target_emotion": target_emotion,
+                    "reply": best_reply,
+                    **stats,
+                }
+            )
 
             generated_turns.append(best_reply)
             messages.append({"role": "assistant", "content": best_reply})
@@ -429,10 +426,7 @@ def generate_mcts_conversation(
     return generated_turns, mcts_log
 
 
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -470,7 +464,7 @@ def main():
     results = []
 
     for i, conversation in enumerate(conversations):
-        print(f"\nRunning {i+1}/{len(conversations)}")
+        print(f"\nRunning {i + 1}/{len(conversations)}")
 
         situation = conversation[0]["prompt"]
         gold_emotion_label = conversation[0]["context"]
@@ -498,37 +492,43 @@ def main():
         reversal_rate = compute_reversal_rate(labels)
         peak_drift_turn = compute_peak_drift_turn(per_step_dist)
         alignment_score = compute_trajectory_alignment(labels, target_trajectory)
-        traj_level_score = compute_trajectory_level_score(labels, target_trajectory, per_step_dist)
-        mean_val_var = float(np.mean([m["value_variance"] for m in mcts_log])) if mcts_log else 0.0
+        traj_level_score = compute_trajectory_level_score(
+            labels, target_trajectory, per_step_dist
+        )
+        mean_val_var = (
+            float(np.mean([m["value_variance"] for m in mcts_log])) if mcts_log else 0.0
+        )
 
-        results.append({
-            "situation": situation,
-            "target_trajectory": target_trajectory,
-            "user_emotion": gold_emotion_label,
-            "assistant_target": assistant_target,
-            "generated_dialogue": generated_turns,
-            "trajectory": labels,
-            "drift": drift,
-            "per_step_distances": per_step_dist,
-            "per_turn_entropy": entropies,
-            "reversal_rate": reversal_rate,
-            "peak_drift_turn": peak_drift_turn,
-            "alignment_score": alignment_score,
-            "traj_level_score": traj_level_score,
-            "mean_value_variance": mean_val_var,
-            "mcts_log": mcts_log,
-            "metadata": {
-                "model": model_name,
-                "n_simulations": n_simulations,
-                "n_rollout": n_rollout,
-                "k_expand": k_expand,
-                "exploration_c": EXPLORATION_C,
-                "planner": "mcts",
-                "scorer": scorer_mode,
-                "temperature": 0.8,
-                "seed": 42,
+        results.append(
+            {
+                "situation": situation,
+                "target_trajectory": target_trajectory,
+                "user_emotion": gold_emotion_label,
+                "assistant_target": assistant_target,
+                "generated_dialogue": generated_turns,
+                "trajectory": labels,
+                "drift": drift,
+                "per_step_distances": per_step_dist,
+                "per_turn_entropy": entropies,
+                "reversal_rate": reversal_rate,
+                "peak_drift_turn": peak_drift_turn,
+                "alignment_score": alignment_score,
+                "traj_level_score": traj_level_score,
+                "mean_value_variance": mean_val_var,
+                "mcts_log": mcts_log,
+                "metadata": {
+                    "model": model_name,
+                    "n_simulations": n_simulations,
+                    "n_rollout": n_rollout,
+                    "k_expand": k_expand,
+                    "exploration_c": EXPLORATION_C,
+                    "planner": "mcts",
+                    "scorer": scorer_mode,
+                    "temperature": 0.8,
+                    "seed": 42,
+                },
             }
-        })
+        )
 
         print(
             f"  User emotion: {gold_emotion_label} | "
@@ -553,10 +553,13 @@ def main():
         ("Alignment score", [x["alignment_score"] for x in results]),
         ("Reversal rate", [x["reversal_rate"] for x in results]),
         ("Mean entropy", [np.mean(x["per_turn_entropy"]) for x in results]),
-        ("Mean step distance", [
-            np.mean(x["per_step_distances"]) if x["per_step_distances"] else 0.0
-            for x in results
-        ]),
+        (
+            "Mean step distance",
+            [
+                np.mean(x["per_step_distances"]) if x["per_step_distances"] else 0.0
+                for x in results
+            ],
+        ),
         ("Traj level score", [x["traj_level_score"] for x in results]),
         ("Value variance", [x["mean_value_variance"] for x in results]),
     ]:

@@ -4,7 +4,7 @@ import torch
 from experiments.run_baseline_generation import (
     load_situations,
     generate_dialogue,
-    model_name
+    model_name,
 )
 from models.emotion_classifier import EmotionClassifier
 from evaluation.trajectory import extract_trajectory, compute_drift
@@ -15,11 +15,9 @@ def main():
     # Load model
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float16,
-        device_map="auto"
+        model_name, torch_dtype=torch.float16, device_map="auto"
     )
-    
+
     print("CUDA available:", torch.cuda.is_available())
     print("Current device:", torch.cuda.current_device())
     print("Device name:", torch.cuda.get_device_name(0))

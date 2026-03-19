@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 import numpy as np
 
 
@@ -9,11 +8,7 @@ def extract_trajectory(dialogue, classifier):
     with torch.no_grad():
         for turn in dialogue:
             emotion, score = classifier.predict_top_emotion(turn)
-            trajectory.append({
-                "text": turn,
-                "emotion": emotion,
-                "confidence": score
-            })
+            trajectory.append({"text": turn, "emotion": emotion, "confidence": score})
 
     return trajectory
 
@@ -35,9 +30,7 @@ def compute_drift(dialogue, classifier):
         v2 = vectors[i + 1]
 
         # Cosine similarity using NumPy
-        sim = np.dot(v1, v2) / (
-            np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-9
-        )
+        sim = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-9)
 
         drift_scores.append(1 - sim)
 

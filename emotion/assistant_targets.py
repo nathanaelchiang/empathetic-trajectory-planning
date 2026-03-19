@@ -1,7 +1,4 @@
-
-
 ASSISTANT_TARGET_MAP = {
-
     # Negative affect → support
     "guilty": "caring",
     "ashamed": "caring",
@@ -21,7 +18,6 @@ ASSISTANT_TARGET_MAP = {
     "jealous": "caring",
     "disgusted": "caring",
     "embarrassed": "caring",
-
     # Positive affect → amplify positivity
     "confident": "admiration",
     "excited": "joy",
@@ -31,7 +27,6 @@ ASSISTANT_TARGET_MAP = {
     "grateful": "gratitude",
     "thrilled": "joy",
     "ecstatic": "joy",
-
     # Surprise → shared positive surprise
     "surprised": "joy",
     "astonished": "joy",
