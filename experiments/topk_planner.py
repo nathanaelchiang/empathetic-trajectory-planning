@@ -35,8 +35,8 @@ torch.manual_seed(42)
 
 # model_name = "mistralai/Mistral-7B-Instruct-v0.3"
 # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-model_name = "Qwen/Qwen2.5-3B-Instruct"
-# model_name = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+# model_name = "Qwen/Qwen2.5-3B-Instruct"
+model_name = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 # model_name = "Qwen/Qwen2.5-7B-Instruct"
 # model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
 # model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"

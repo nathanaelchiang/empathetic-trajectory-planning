@@ -27,7 +27,7 @@ model_name = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 # model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 STRIP_THINK = "R1" in model_name
 
-MAX_NEW_TOKENS = 512
+MAX_NEW_TOKENS = 150
 
 
 def strip_think_tags(text):

@@ -59,7 +59,7 @@ For each of the K candidates, simulates a cheap linear rollout (single sample, n
 |---|---|---|
 | `K` | 5 | Candidates sampled per turn |
 | `LOOKAHEAD_DEPTH` | 2 | Future assistant turns to simulate |
-| `MAX_NEW_TOKENS` | 512 | Max tokens per generation |
+| `MAX_NEW_TOKENS` | 150 | Max tokens per generation |
 | `SCORER_MODE` | `classifier` | `classifier`, `llm_judge`, or `both` |
 
 ### Tree-of-Thought (`tot_planner.py`)
@@ -70,7 +70,7 @@ Beam search over a tree of assistant replies. At each depth, expands every survi
 | `K_BRANCHES` | 3 | Branches expanded per node |
 | `BEAM_WIDTH` | 2 | Nodes kept after each depth level |
 | `DEPTH` | 2 | Look-ahead depth in assistant turns |
-| `MAX_NEW_TOKENS` | 512 | Max tokens per generation |
+| `MAX_NEW_TOKENS` | 150 | Max tokens per generation |
 | `SCORER_MODE` | `classifier` | `classifier`, `llm_judge`, or `both` |
 
 

@@ -51,8 +51,8 @@ STRIP_THINK = "R1" in model_name
 K = 5  # number of candidates per turn
 LOOKAHEAD_DEPTH = 2  # how many future assistant turns to simulate per candidate
 # MAX_NEW_TOKENS = 64  # for both candidates and rollout replies
-# MAX_NEW_TOKENS = 150
-MAX_NEW_TOKENS = 512
+MAX_NEW_TOKENS = 150
+# MAX_NEW_TOKENS = 512
 # MAX_NEW_TOKENS = 200
 
 # choose: "classifier",    "llm_judge", or "both"
