@@ -1,6 +1,7 @@
 import json
 import random
 import os
+import re
 import numpy as np
 import torch
 from datetime import datetime
@@ -16,7 +17,21 @@ random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
 
-model_name = "mistralai/Mistral-7B-Instruct-v0.3"
+# model_name = "mistralai/Mistral-7B-Instruct-v0.3"
+# model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+# model_name = "Qwen/Qwen2.5-1.5B-Instruct"
+# model_name = "Qwen/Qwen2.5-3B-Instruct"
+model_name = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+# model_name = "Qwen/Qwen2.5-7B-Instruct"
+# model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+# model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+STRIP_THINK = "R1" in model_name
+
+MAX_NEW_TOKENS = 512
+
+
+def strip_think_tags(text):
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 # Data Loading
@@ -66,14 +81,15 @@ def generate_conversation(conversation, tokenizer, model):
             with torch.inference_mode():
                 output_ids = model.generate(
                     **inputs,
-                    max_new_tokens=150,
+                    max_new_tokens=MAX_NEW_TOKENS,
                     temperature=0.8,
                     top_p=0.9,
                     do_sample=True,
                     pad_token_id=tokenizer.eos_token_id,
                 )
             new_tokens = output_ids[0][inputs["input_ids"].shape[-1] :]
-            reply = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+            decoded = tokenizer.decode(new_tokens, skip_special_tokens=True)
+            reply = strip_think_tags(decoded) if STRIP_THINK else decoded.strip()
             generated_assistant_turns.append(reply)
             messages.append({"role": "assistant", "content": reply})
 
@@ -103,12 +119,15 @@ def compute_emotion_entropy(probs: list[np.ndarray]) -> list[float]:
 
 
 def compute_reversal_rate(labels: list[str]) -> float:
-    seen, reversals = set(), 0
-    for i, label in enumerate(labels):
-        if i > 0 and label in seen:
+    if len(labels) < 2:
+        return 0.0
+
+    reversals = 0
+    for i in range(1, len(labels)):
+        if labels[i] != labels[i - 1]:
             reversals += 1
-        seen.add(label)
-    return reversals / max(len(labels) - 1, 1)
+
+    return reversals / (len(labels) - 1)
 
 
 def compute_peak_drift_turn(distances: list[float]) -> int:

@@ -13,6 +13,7 @@ import json
 import random
 import os
 import argparse
+import re
 import numpy as np
 import torch
 from datetime import datetime
@@ -37,21 +38,36 @@ random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
 
-model_name = "mistralai/Mistral-7B-Instruct-v0.3"
+# model_name = "mistralai/Mistral-7B-Instruct-v0.3"
 # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+# model_name = "Qwen/Qwen2.5-3B-Instruct"
+model_name = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+# model_name = "Qwen/Qwen2.5-7B-Instruct"
+# model_name = "google/gemma-2-9b-it"
+# model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+# model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+STRIP_THINK = "R1" in model_name
 
 K = 5  # number of candidates per turn
 LOOKAHEAD_DEPTH = 2  # how many future assistant turns to simulate per candidate
 # MAX_NEW_TOKENS = 64  # for both candidates and rollout replies
-MAX_NEW_TOKENS = 150
+# MAX_NEW_TOKENS = 150
+MAX_NEW_TOKENS = 512
+# MAX_NEW_TOKENS = 200
 
-# choose: "classifier", "llm_judge", or "both"
+# choose: "classifier",    "llm_judge", or "both"
 SCORER_MODE = "classifier"
 JUDGE_MODEL = "claude-sonnet-4-20250514"
 
 
 def get_model_device(model):
+    """Return the device of the first parameter of a model."""
     return next(model.parameters()).device
+
+
+def strip_think_tags(text):
+    """Remove <think>...</think> blocks produced by reasoning models (e.g. DeepSeek-R1)."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 # Generation helpers
@@ -79,9 +95,8 @@ def generate_candidates(messages, tokenizer, model, k=K):
     candidates = []
     for seq in output_ids:
         new_tokens = seq[prompt_len:]
-        candidates.append(
-            tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        )
+        decoded = tokenizer.decode(new_tokens, skip_special_tokens=True)
+        candidates.append(strip_think_tags(decoded) if STRIP_THINK else decoded.strip())
     return candidates
 
 
@@ -106,12 +121,11 @@ def sample_single_reply(messages, tokenizer, model):
 
     prompt_len = inputs["input_ids"].shape[-1]
     new_tokens = output_ids[0][prompt_len:]
-    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    decoded = tokenizer.decode(new_tokens, skip_special_tokens=True)
+    return strip_think_tags(decoded) if STRIP_THINK else decoded.strip()
 
 
 # Scoring helpers
-
-
 def score_classifier_batch(replies, target_emotion, classifier):
     """Return P(target_emotion) for each reply."""
     if target_emotion not in classifier.label2id:
@@ -159,6 +173,7 @@ def score_llm_judge_batch(replies, target_emotion, dialogue_history):
 
 
 def normalize_scores(x):
+    """Min-max normalize an array of scores to [0, 1]; returns uniform weights if all values are equal."""
     x = np.array(x, dtype=float)
     r = x.max() - x.min()
     if r > 0:
@@ -187,8 +202,6 @@ def trajectory_score_from_replies_targets(replies, targets, classifier):
 
 
 # Lookahead rollout
-
-
 def rollout_candidate(
     candidate_reply,
     base_messages,
@@ -306,6 +319,29 @@ def generate_lookahead_conversation(
     scorer_mode=SCORER_MODE,
     debug=False,
 ):
+    """Generate assistant turns for a full conversation using lookahead reranking.
+
+    For each assistant turn, samples K candidates and scores each via a linear
+    rollout of `lookahead_depth` future turns. The candidate whose rollout
+    yields the best trajectory-level score is selected.
+
+    Args:
+        conversation: List of turn dicts with 'utterance' (and 'prompt'/'context'
+            on the first turn).
+        tokenizer: HuggingFace tokenizer for the generative model.
+        model: HuggingFace causal LM used for generation and rollout sampling.
+        classifier: EmotionClassifier for scoring trajectories.
+        target_trajectory: List of target emotion labels, one per assistant turn.
+        lookahead_depth: Number of future assistant turns to simulate per candidate.
+        k: Number of candidates to generate per turn.
+        scorer_mode: One of "classifier", "llm_judge", or "both".
+        debug: If True, include per-candidate rollout detail in the log.
+
+    Returns:
+        generated_turns: List of selected assistant reply strings.
+        lookahead_log: List of per-turn dicts recording candidates, scores, and
+            selection metadata.
+    """
     messages = [
         {
             "role": "system",
@@ -404,6 +440,7 @@ def generate_lookahead_conversation(
 
 # Main
 def main():
+    """Load data and model, run lookahead planning over all conversations, and save results."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-conversations", type=int, default=100)
     parser.add_argument("--lookahead-depth", type=int, default=LOOKAHEAD_DEPTH)

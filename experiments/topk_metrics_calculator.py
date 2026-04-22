@@ -1,7 +1,7 @@
 import json
 import numpy as np
 
-filename = "results/topk_results_classifier_20260413_062212.json"
+filename = "results/topk_results_classifier_20260416_181941.json"
 print(f"Saved to: {filename}")
 
 with open(filename, "r", encoding="utf-8") as f:
@@ -9,10 +9,12 @@ with open(filename, "r", encoding="utf-8") as f:
 
 
 def safe_mean(arr):
+    """Return the mean of arr as a float, or 0.0 if arr is empty."""
     return float(np.mean(arr)) if arr else 0.0
 
 
 def get_metric(x, key, default=0.0):
+    """Return x[key] if present, otherwise default."""
     return x[key] if key in x else default
 
 

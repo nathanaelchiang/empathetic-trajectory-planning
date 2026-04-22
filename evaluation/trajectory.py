@@ -3,6 +3,17 @@ import numpy as np
 
 
 def extract_trajectory(dialogue, classifier):
+    """Return a list of per-turn dicts with 'text', 'emotion', and 'confidence' keys.
+
+    Args:
+        dialogue: Iterable of utterance strings representing a conversation.
+        classifier: Emotion classifier with a `predict_top_emotion(text)` method
+            that returns (emotion_label, confidence_score).
+
+    Returns:
+        List of dicts, one per turn, each containing the original text, the
+        predicted top emotion label, and the classifier's confidence score.
+    """
     trajectory = []
 
     with torch.no_grad():
@@ -14,6 +25,20 @@ def extract_trajectory(dialogue, classifier):
 
 
 def compute_drift(dialogue, classifier):
+    """Compute the mean cosine drift across consecutive turns in a dialogue.
+
+    Drift measures how much the emotion probability distribution shifts between
+    adjacent turns. A score of 0 means no change; 1 means complete reversal.
+
+    Args:
+        dialogue: Iterable of utterance strings representing a conversation.
+        classifier: Emotion classifier with a `predict_proba(text)` method that
+            returns an array of shape (1, num_emotions).
+
+    Returns:
+        Mean cosine drift as a float in [0, 1]. Returns 0.0 if the dialogue has
+        fewer than two turns.
+    """
     vectors = []
 
     for turn in dialogue:

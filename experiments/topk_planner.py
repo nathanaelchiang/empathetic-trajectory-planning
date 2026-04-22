@@ -8,6 +8,7 @@ label it as such when comparing against ToT / MCTS in the paper.
 import json
 import random
 import os
+import re
 import numpy as np
 import torch
 from datetime import datetime
@@ -32,17 +33,31 @@ random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
 
-# model_name  = "mistralai/Mistral-7B-Instruct-v0.3"
-model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+# model_name = "mistralai/Mistral-7B-Instruct-v0.3"
+# model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+model_name = "Qwen/Qwen2.5-3B-Instruct"
+# model_name = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+# model_name = "Qwen/Qwen2.5-7B-Instruct"
+# model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+# model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+STRIP_THINK = "R1" in model_name
+
 JUDGE_MODEL = "claude-sonnet-4-20250514"
 K = 5
+MAX_NEW_TOKENS = 150
 
 # choose: "classifier", "llm_judge", or "both"
 SCORER_MODE = "classifier"
 
 
+def strip_think_tags(text):
+    """Remove <think>...</think> blocks produced by reasoning models (e.g. DeepSeek-R1)."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+
 # Candidate generation
 def generate_candidates(messages, tokenizer, model, k=K):
+    """Sample k candidate replies from the model, one at a time."""
     text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
@@ -54,21 +69,21 @@ def generate_candidates(messages, tokenizer, model, k=K):
         with torch.inference_mode():
             output_ids = model.generate(
                 **inputs,
-                max_new_tokens=150,
+                max_new_tokens=MAX_NEW_TOKENS,
                 temperature=0.8,
                 top_p=0.9,
                 do_sample=True,
                 pad_token_id=tokenizer.eos_token_id,
             )
         new_tokens = output_ids[0][inputs["input_ids"].shape[-1] :]
-        candidates.append(
-            tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        )
+        decoded = tokenizer.decode(new_tokens, skip_special_tokens=True)
+        candidates.append(strip_think_tags(decoded) if STRIP_THINK else decoded.strip())
     return candidates
 
 
 # Scorers
 def score_with_classifier(candidates, target_emotion, classifier, warned_missing=None):
+    """Return P(target_emotion) for each candidate; returns zeros if label is unknown."""
     label_index = classifier.label2id.get(target_emotion, None)
 
     if label_index is None:
@@ -82,6 +97,7 @@ def score_with_classifier(candidates, target_emotion, classifier, warned_missing
 
 
 def score_with_llm_judge(candidates, target_emotion, dialogue_history):
+    """Score candidates using an LLM judge (Anthropic API); returns 0.0 on parse failure."""
     import anthropic
 
     client = anthropic.Anthropic()
@@ -125,6 +141,7 @@ Respond with ONLY a JSON object: {{"score": <float 0.0-1.0>, "reason": "<one sen
 
 
 def normalize_scores(x):
+    """Min-max normalize an array of scores to [0, 1]; returns uniform weights if all values are equal."""
     x = np.array(x, dtype=float)
     r = x.max() - x.min()
     if r > 0:
@@ -140,6 +157,19 @@ def score_candidates(
     scorer_mode=SCORER_MODE,
     warned_missing=None,
 ):
+    """Score and normalize candidates using the selected scorer(s).
+
+    Args:
+        candidates: List of candidate reply strings.
+        target_emotion: Target emotion label for this turn.
+        classifier: EmotionClassifier instance.
+        dialogue_history: Message history list used by the LLM judge.
+        scorer_mode: One of "classifier", "llm_judge", or "both".
+        warned_missing: Optional set to accumulate unknown emotion label warnings.
+
+    Returns:
+        List of normalized float scores in [0, 1], one per candidate.
+    """
     if scorer_mode == "classifier":
         clf = score_with_classifier(
             candidates, target_emotion, classifier, warned_missing
@@ -176,6 +206,24 @@ def generate_topk_conversation(
     scorer_mode=SCORER_MODE,
     warned_missing=None,
 ):
+    """Generate assistant turns using single-turn top-k reranking.
+
+    For each assistant turn, samples K candidates and selects the one with the
+    highest score against the current target emotion. No lookahead is performed.
+
+    Args:
+        conversation: List of turn dicts with an 'utterance' key.
+        tokenizer: HuggingFace tokenizer.
+        model: HuggingFace causal LM.
+        classifier: EmotionClassifier for scoring.
+        target_trajectory: List of target emotion labels, one per assistant turn.
+        scorer_mode: One of "classifier", "llm_judge", or "both".
+        warned_missing: Optional set to accumulate unknown emotion label warnings.
+
+    Returns:
+        generated_turns: List of selected assistant reply strings.
+        candidate_log: Per-turn dicts recording candidates, scores, and selection metadata.
+    """
     messages = [
         {
             "role": "system",
@@ -236,6 +284,7 @@ def generate_topk_conversation(
 
 
 def main():
+    """Load data and model, run top-k reranking over all conversations, and save results."""
     warned_missing = set()
     classifier = EmotionClassifier()
     print("Classifier labels:")
