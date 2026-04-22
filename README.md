@@ -129,17 +129,16 @@ python -m experiments.topk_planner
 
 # Linear lookahead
 python -m experiments.lookahead_planner \
-  --num-conversations 100 \
   --lookahead-depth 2 \
   --k 5 \
-  --scorer classifier
 
 # Tree-of-Thought
-python -m experiments.tot_planner --num-conversations 100
+python -m experiments.tot_planner
 
 Results are saved to `results/` as timestamped JSON files (e.g. `results/lookahead_results_classifier_20260416_120000.json`).
 
 ### Computing aggregate metrics
+Replace `filename` with the name of the results file. 
 
 ```bash
 python -m experiments.baseline_metrics_calculator
