@@ -118,6 +118,8 @@ python -m experiments.demo --mode mock
 
 Runs a mock pipeline with hardcoded dialogues — no model loading, completes in ~30 seconds.
 
+Use `--mode real` to load an LLM and run all four planners on live EmpatheticDialogues conversations (requires a CUDA GPU).
+
 ### Full experiments
 
 ```bash

@@ -1,6 +1,9 @@
 torch
 transformers
 numpy
+datasets
+bitsandbytes
+accelerate
+anthropic
 scikit-learn
 matplotlib
-datasets
